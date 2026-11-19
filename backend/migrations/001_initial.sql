@@ -1,3 +1,5 @@
 -- SQLAlchemy metadata initializes tables idempotently.
 -- Domain tables: drying_studies, drying_samples, regression_runs, process_memos.
 -- Unique natural keys: source.key; (record.source_id, record.reference).
+-- Aggregate disclosure: drying_aggregates (request_key unique) and disclosure_locks
+-- (single optimistic-version row serializing verification).

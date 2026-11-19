@@ -4,11 +4,12 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from .config.database import Base,engine
 from .config.settings import CONFIG
-from .models import user,source,record,run,note,audit
+from .models import user,source,record,run,note,audit,aggregate
 from .middlewares.errors import error_boundary
 from .middlewares.rate_limit import rate_limit
-from .routes import auth,sources,runs,notes,audit as audit_routes
+from .routes import auth,sources,runs,notes,audit as audit_routes,aggregates
 from .services.runs import queue
+from .services.aggregates import resume_pending
 @asynccontextmanager
 async def lifespan(app):
     Base.metadata.create_all(engine)
@@ -17,11 +18,14 @@ async def lifespan(app):
             from scripts.seed_demo import seed
             seed()
         except Exception:logging.exception('seed failed; service remains available')
+    try:
+        resume_pending()
+    except Exception:logging.exception('pending aggregate resume failed; service remains available')
     yield
 app=FastAPI(title=CONFIG['title'],lifespan=lifespan)
 app.middleware('http')(error_boundary)
 app.middleware('http')(rate_limit)
-for router in (auth.router,sources.router,runs.router,notes.router,audit_routes.router):app.include_router(router)
+for router in (auth.router,sources.router,runs.router,notes.router,audit_routes.router,aggregates.router):app.include_router(router)
 @app.get('/health')
 def health():
     with engine.connect() as c:c.execute(text('SELECT 1'))

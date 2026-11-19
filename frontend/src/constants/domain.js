@@ -21,6 +21,7 @@ export const domain = {
   "record_table": "drying_samples",
   "run_table": "regression_runs",
   "note_table": "process_memos",
+  "aggregate_table": "drying_aggregates",
   "eyebrow": "PROCESS THERMOMETRY / 44",
   "headline": "给干燥时长，一个可复查的估计。",
   "subtitle": "槐序材料试制组 · 特征子集选择与留出验证",

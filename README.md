@@ -13,7 +13,8 @@ RandomForest回归、训练内特征子集交叉验证与留出集MAE。为槐�
 3. 分析配置：冻结来源、参数和全部样本，进入Redis队列。
 4. 完整结果：真实算法摘要、专属诊断、全部CSV导出和可恢复失败态。
 5. 工艺试验备忘：分析师草案→负责人批准→阅读者下载批准快照。
-6. 审计：登录、来源修改、任务worker完成、业务说明批准等事件。
+6. 合计公开：同来源试件合计时长申请、单件泄露核验与公开账册。
+7. 审计：登录、来源修改、任务worker完成、业务说明批准等事件。
 
 ## 快速启动
 
@@ -45,17 +46,21 @@ docker compose exec -T backend python -m scripts.seed_demo
 |---|---|---|
 | admin@drying-forest.demo | admin | 全部录入/执行、批准业务说明 |
 | analyst@drying-forest.demo | analyst | 录入来源/样本、执行、提交说明，无批准权 |
-| viewer@drying-forest.demo | viewer | 只读、导出结果及已批准快照 |
+| viewer@drying-forest.demo | viewer | 只读、导出结果、已批准快照与已公开合计 |
 
 时间在数据库/API中以UTC存储，总览与审计页面明确转换为Asia/Shanghai北京时间。
 
-JWT有效期8小时；PBKDF2盐化哈希保存密码；角色每请求从数据库读取。访客写操作403，匿名访问业务数据401，重复样本409，非法业务字段422，重复批准409。每客户端/路径写请求90次/分钟，超限429。生产使用需修改JWT及演示数据库凭据。
+JWT有效期8小时；PBKDF2盐化哈希保存密码；角色每请求从数据库读取。访客写操作403，匿名访问业务数据401，重复样本409，非法业务字段422，重复批准409。合计申请只接受同一来源的编号，跨来源或批内重复编号422，`request_key` 复用于不同名单409。每客户端/路径写请求90次/分钟，超限429。生产使用需修改JWT及演示数据库凭据。
 
 ## 实体与字段
 
-DryingStudy / DryingSample / RegressionRun / ProcessMemo 是核心实体；另有User和Audit。数据库实际表：`drying_studies` → `drying_samples` → `regression_runs` → `process_memos`。样本以固定字段JSON保存，后端按以下字段严格验证，不接受未知字段替代必填值：初始湿度 %（`moisture`）、厚度 mm（`thickness`）、设定温度 ℃（`temperature`）、风量 m³/min（`airflow`）、实测时长 min（`minutes`）。
+DryingStudy / DryingSample / RegressionRun / ProcessMemo 是核心实体；另有User、Audit、AggregateRequest 与 DisclosureLock。数据库实际表：`drying_studies` → `drying_samples` → `regression_runs` → `process_memos`，以及 `drying_aggregates`、`disclosure_locks`。样本以固定字段JSON保存，后端按以下字段严格验证，不接受未知字段替代必填值：初始湿度 %（`moisture`）、厚度 mm（`thickness`）、设定温度 ℃（`temperature`）、风量 m³/min（`airflow`）、实测时长 min（`minutes`）。
 
 实体贯穿 `backend/src/models`、`schemas`、`services`、`controllers`、`routes`，以及 `frontend/src/api/research.js`、`stores/research.js` 和 `pages`。`Source.key` 与 `(Record.source_id, reference)` 为自然键；来源改名不会修改已冻结任务输入。业务说明在创建时保存结果快照，批准后从该快照导出。
+
+## 合计公开与单件保护
+
+“合计公开”模块只受理同一来源的试件编号（`/aggregates`）：每份申请的合计都是“名单内各试件实测时长之和”。已公开合计与本次合计被当作 0/1 系数方程，系统用精确有理数行化简判断这些方程能否线性确定任意一个单件时长；单件名单、子集/超集相减、多份合计叠加只要泄露任一单件即拒绝。状态只为 `pending`（待核验）、`published`（已公开）、`rejected`（已拒绝）；申请一旦受理，合计先落库且仅 `published` 后由 API 返回，页面在此之前只显示“合计未公开”。服务启动时接着核验已存待核验申请，补录样本后仍沿用旧合计；相同 `request_key` 的重试只生效一次，核验通过全局锁行的乐观版本号串行化，并发申请不会同时公开合起来会泄露单件的结果。
 
 ## 算法与口径
 
